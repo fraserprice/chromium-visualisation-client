@@ -43,9 +43,20 @@ class Home extends React.Component {
     });
   };
 
+  normaliseTreemap = (treemap) => {
+    return treemap.map(node => {
+      if (!isNaN(parseInt(node[3]))) {
+        const normalisedValue = parseFloat(node[3]) / parseFloat(Math.sqrt(node[2]));
+        return [node[0], node[1], node[2], normalisedValue]
+      }
+      return node
+    });
+  };
+
   onChangeTreemap = () => {
-    const e = document.getElementById("select-treemap");
-    const chartValue = e.options[e.selectedIndex].value;
+    const select = document.getElementById("select-treemap");
+    const chartValue = select.options[select.selectedIndex].value;
+    const normalise = document.getElementById("normalise-by-size").checked;
     let isPdfium, allBugs, ratio = false;
     switch(chartValue) {
       case 'pdfium-all':
@@ -94,33 +105,39 @@ class Home extends React.Component {
                 return data
               });
               const data = [security, all];
-              const zippedData = this.zip(data).map(data => {
+              let zippedData = this.zip(data).map(data => {
                 if (!isNaN(parseInt(data[0][3]))) {
                   const sec = data[0][3];
                   const all = data[1][3] === 0 ? 1 : data[1][3];
-                  const secAll = [data[0][0], data[0][1], data[0][2], parseFloat(sec) / parseFloat(all)]
+                  const secAll = [data[0][0], data[0][1], data[0][2], parseFloat(sec) / parseFloat(all)];
                   return secAll
                 }
                 return data[0];
               });
+              if(normalise) {
+                zippedData = this.normaliseTreemap(zippedData)
+              }
               this.setState({treemapLoaded: true, treemap: zippedData});
             }
           });
         }
       });
     } else {
-      this.getTreemap(isPdfium, allBugs, 'status:closed', (err, json) => {
+      this.getTreemap(isPdfium, allBugs, 'status:closed', (err, treemap) => {
         if (err) {
           alert(err);
         } else {
-          json.map(data => {
+          treemap.map(data => {
             if (!isNaN(parseInt(data[2]))) {
               data[2] = parseInt(data[2]);
               data[3] = parseInt(data[3]);
             }
             return data
           });
-          this.setState({treemapLoaded: true, treemap: json});
+          if(normalise) {
+            treemap = this.normaliseTreemap(treemap)
+          }
+          this.setState({treemapLoaded: true, treemap: treemap});
         }
       });
     }
@@ -163,6 +180,8 @@ class Home extends React.Component {
           <option value="chromium-security">C: Security</option>
           <option value="chromium-security-vs-all">C: Security : All</option>
         </select>
+        <input id="normalise-by-size" type="checkbox" onChange={this.onChangeTreemap}/>
+        <label for="normalise-by-size">Normalise by file size</label>
         <Chart
           chartType="TreeMap"
           data={this.state.treemap}
