@@ -28,10 +28,16 @@ class Home extends React.Component {
     ).catch(err => callback(err));
   };
 
+  zip = (arrays) => {
+    return arrays[0].map(function(_,i){
+      return arrays.map(function(array){return array[i]})
+    });
+  };
+
   onChangeTreemap = () => {
     const e = document.getElementById("select-treemap");
     const chartValue = e.options[e.selectedIndex].value;
-    let isPdfium, allBugs;
+    let isPdfium, allBugs, ratio = false;
     switch(chartValue) {
       case 'pdfium-all':
         isPdfium = true;
@@ -41,9 +47,10 @@ class Home extends React.Component {
         isPdfium = true;
         allBugs = false;
         break;
-      case 'pdfium-all-vs-security':
+      case 'pdfium-security-vs-all':
         isPdfium = true;
         allBugs = true;
+        ratio = true;
         break;
       case 'chromium-all':
         isPdfium = false;
@@ -53,24 +60,61 @@ class Home extends React.Component {
         isPdfium = false;
         allBugs = false;
         break;
-      default:
-        isPdfium = true;
-        allBugs = true;
     }
-    this.getTreemap(isPdfium, allBugs, 'status:closed', (err, json) => {
-      if(err) {
-        alert(err);
-      } else {
-        json.map(data => {
-          if(!isNaN(parseInt(data[2]))) {
-            data[2] = parseInt(data[2]);
-            data[3] = parseInt(data[3]);
-          }
-          return data
-        });
-        this.setState({treemapLoaded: true, treemap: json});
-      }
-    });
+    if(ratio) {
+      this.getTreemap(isPdfium, true, 'status:closed', (allErr, all) => {
+        if(allErr) {
+          alert(allErr);
+        } else {
+          this.getTreemap(isPdfium, false, 'status:closed', (secErr, security) => {
+            if(secErr) {
+              alert(secErr);
+            } else {
+              all.map(data => {
+                if (!isNaN(parseInt(data[2]))) {
+                  data[2] = parseInt(data[2]);
+                  data[3] = parseInt(data[3]);
+                }
+                return data
+              });
+              security.map(data => {
+                if (!isNaN(parseInt(data[2]))) {
+                  data[2] = parseInt(data[2]);
+                  data[3] = parseInt(data[3]);
+                }
+                return data
+              });
+              const data = [security, all];
+              const zippedData = this.zip(data).map(data => {
+                if (!isNaN(parseInt(data[0][3]))) {
+                  const sec = data[0][3];
+                  const all = data[1][3] === 0 ? 1 : data[1][3];
+                  const secAll = [data[0][0], data[0][1], data[0][2], parseFloat(sec) / parseFloat(all)]
+                  return secAll
+                }
+                return data[0];
+              });
+              this.setState({treemapLoaded: true, treemap: zippedData});
+            }
+          });
+        }
+      });
+    } else {
+      this.getTreemap(isPdfium, allBugs, 'status:closed', (err, json) => {
+        if (err) {
+          alert(err);
+        } else {
+          json.map(data => {
+            if (!isNaN(parseInt(data[2]))) {
+              data[2] = parseInt(data[2]);
+              data[3] = parseInt(data[3]);
+            }
+            return data
+          });
+          this.setState({treemapLoaded: true, treemap: json});
+        }
+      });
+    }
   };
 
   render() {
@@ -105,9 +149,10 @@ class Home extends React.Component {
         <select id="select-treemap" onChange={this.onChangeTreemap}>
           <option value="pdfium-all">P: All</option>
           <option value="pdfium-security">P: Security</option>
-          <option value="pdfium-all-vs-security">P: All : Security</option>
+          <option value="pdfium-security-vs-all">P: Security : All</option>
           <option value="chromium-all">C: All</option>
           <option value="chromium-security">C: Security</option>
+          <option value="chromium-security-vs-all">C: Security : All</option>
         </select>
         <Chart
           chartType="TreeMap"
