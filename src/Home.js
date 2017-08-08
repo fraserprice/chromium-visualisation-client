@@ -13,6 +13,15 @@ class Home extends React.Component {
     }
   };
 
+  showFullTooltip = (row, size, value) => {
+    return (
+      '<div style="background:#fd9; padding:10px; border-style:solid">' +
+        'Lines of Code: ' + size +
+        '<br>Security Bug Severity %: ' + value +
+      '</div>'
+    );
+  };
+
   getTreemap = (isPdfium, allBugs, query, callback) => {
     const platform = isPdfium ? 'pdfium/' : 'chromium/';
     const treemap = allBugs ? 'treemap/' : 'security_treemap/';
@@ -138,7 +147,7 @@ class Home extends React.Component {
 
     return (
       <div>
-        <h1>Visualisations</h1>
+        <h1>Chromium Bug Visualisations</h1>
         <p>
           This is a tool for viewing an overview of bugs in the Chromium and Pdfium projects as they appear in the
           source code. API calls can be made
@@ -171,6 +180,7 @@ class Home extends React.Component {
             headerHeight: 15,
             showScale: true,
             useWeightedAverageForAggregation: true,
+            generateTooltip: this.showFullTooltip
           }}
           graph_id="TreeMap"
           width="100%"
