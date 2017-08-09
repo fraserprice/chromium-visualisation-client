@@ -43,6 +43,7 @@ class Home extends React.Component {
     });
   };
 
+  //TODO: Move to backend + make call for normalised treemap
   normaliseTreemap = (treemap) => {
     return treemap.map(node => {
       if (!isNaN(parseInt(node[3]))) {
@@ -82,6 +83,7 @@ class Home extends React.Component {
         break;
     }
     if(ratio) {
+      //TODO: Move to backend + make call for security : all treemap
       this.getTreemap(isPdfium, true, 'status:closed', (allErr, all) => {
         if(allErr) {
           alert(allErr);
@@ -176,9 +178,6 @@ class Home extends React.Component {
           <option value="pdfium-all">P: All</option>
           <option value="pdfium-security">P: Security</option>
           <option value="pdfium-security-vs-all">P: Security : All</option>
-          <option value="chromium-all">C: All</option>
-          <option value="chromium-security">C: Security</option>
-          <option value="chromium-security-vs-all">C: Security : All</option>
         </select>
         <input id="normalise-by-size" type="checkbox" onChange={this.onChangeTreemap}/>
         <label for="normalise-by-size">Normalise by file size</label>
@@ -189,7 +188,7 @@ class Home extends React.Component {
             chartPackages: ['treemap'],
             highlightOnMouseOver: true,
             maxDepth: 2,
-            maxPostDepth: 4,
+            maxPostDepth: 3,
             minHighlightColor: '#3cc904',
             midHighlightColor: '#2310cc',
             maxHighlightColor: '#cf02c8',
