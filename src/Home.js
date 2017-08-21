@@ -4,184 +4,119 @@ import fetch from 'isomorphic-fetch'
 
 const URL = 'https://chromium-db-app.herokuapp.com/';
 
+// Map selected field to url query string
+
 class Home extends React.Component {
   constructor() {
     super();
     this.state = {
+      maxValue: 0,
+      treemap: [],
       treemapLoaded: false,
-      treemap: []
-    }
+      treemapRoot: '~',
+      treemapType: '',
+      depth: 0,
+      normalise: false
+    };
+    this.chartEvents = [
+      {
+        eventName: 'select',
+        callback : Chart => {
+          let row = Chart.chart.getSelection()[0].row + 1;
+          let selectedNodePath = this.state.treemap[row][0];
+          this.setState({treemapRoot: selectedNodePath}, () => {
+            this.reloadTreemap();
+          });
+        }
+      }
+    ];
+
   };
 
   showFullTooltip = (row, size, value) => {
     return (
       '<div style="background:#fd9; padding:10px; border-style:solid">' +
-        'Lines of Code: ' + size +
-        '<br>Security Bug Severity %: ' + value +
+        this.state.treemap[row + 1][0] +
+        '<br>Lines of Code: ' + size +
+        '<br>Value: ' + this.state.treemap[row + 1][3] +
       '</div>'
     );
   };
 
-  getTreemap = (isPdfium, allBugs, query, callback) => {
-    const platform = isPdfium ? 'pdfium/' : 'chromium/';
-    const treemap = allBugs ? 'treemap/' : 'security_treemap/';
-    const fullUrl = URL + platform + treemap + query;
-    fetch(fullUrl, {
+  resetTreemap = () => {
+    const select = document.getElementById("select-treemap");
+    const treemapType = select.options[select.selectedIndex].value;
+    const normalise = document.getElementById("normalise-by-size").checked;
+    let depth = parseInt(document.getElementById("tree-depth").value);
+    depth = isNaN(depth) ? 0 : depth;
+    this.setState({
+      treemapRoot: '~',
+      treemapLoaded: false,
+      treemapType: treemapType,
+      depth: depth,
+      normalise: normalise
+    }, () => {
+      this.reloadTreemap();
+    });
+  };
+
+  reloadTreemap = () => {
+
+    let url = URL + this.state.treemapType + 'status:closed/' +
+      this.state.treemapRoot.replace(/\//g, '%2F') + '/' + this.state.depth + '/' + this.state.normalise;
+
+    fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       }
     }).then(response => response.json()
-    ).then(json => callback(false, json)
-    ).catch(err => callback(err));
-  };
-
-  zip = (arrays) => {
-    return arrays[0].map(function(_,i){
-      return arrays.map(function(array){return array[i]})
+    ).then(treemap => {
+      console.log(treemap);
+      let maxValue = this.state.maxValue;
+      treemap.forEach(node => maxValue = node[3] > maxValue ? node[3] : maxValue);
+      this.setState({treemapLoaded: true, treemap: treemap, maxValue: maxValue});
+    }).catch(err => {
+      alert(err);
     });
-  };
-
-  //TODO: Move to backend + make call for normalised treemap
-  normaliseTreemap = (treemap) => {
-    return treemap.map(node => {
-      if (!isNaN(parseInt(node[3]))) {
-        const normalisedValue = parseFloat(node[3]) / parseFloat(Math.sqrt(node[2]));
-        return [node[0], node[1], node[2], normalisedValue]
-      }
-      return node
-    });
-  };
-
-  onChangeTreemap = () => {
-    const select = document.getElementById("select-treemap");
-    const chartValue = select.options[select.selectedIndex].value;
-    const normalise = document.getElementById("normalise-by-size").checked;
-    let isPdfium, allBugs, ratio = false;
-    switch(chartValue) {
-      case 'pdfium-all':
-        isPdfium = true;
-        allBugs = true;
-        break;
-      case 'pdfium-security':
-        isPdfium = true;
-        allBugs = false;
-        break;
-      case 'pdfium-security-vs-all':
-        isPdfium = true;
-        allBugs = true;
-        ratio = true;
-        break;
-      case 'chromium-all':
-        isPdfium = false;
-        allBugs = true;
-        break;
-      case 'chromium-security':
-        isPdfium = false;
-        allBugs = false;
-        break;
-    }
-    if(ratio) {
-      //TODO: Move to backend + make call for security : all treemap
-      this.getTreemap(isPdfium, true, 'status:closed', (allErr, all) => {
-        if(allErr) {
-          alert(allErr);
-        } else {
-          this.getTreemap(isPdfium, false, 'status:closed', (secErr, security) => {
-            if(secErr) {
-              alert(secErr);
-            } else {
-              all.map(data => {
-                if (!isNaN(parseInt(data[2]))) {
-                  data[2] = parseInt(data[2]);
-                  data[3] = parseInt(data[3]);
-                }
-                return data
-              });
-              security.map(data => {
-                if (!isNaN(parseInt(data[2]))) {
-                  data[2] = parseInt(data[2]);
-                  data[3] = parseInt(data[3]);
-                }
-                return data
-              });
-              const data = [security, all];
-              let zippedData = this.zip(data).map(data => {
-                if (!isNaN(parseInt(data[0][3]))) {
-                  const sec = data[0][3];
-                  const all = data[1][3] === 0 ? 1 : data[1][3];
-                  const secAll = [data[0][0], data[0][1], data[0][2], parseFloat(sec) / parseFloat(all)];
-                  return secAll
-                }
-                return data[0];
-              });
-              if(normalise) {
-                zippedData = this.normaliseTreemap(zippedData)
-              }
-              this.setState({treemapLoaded: true, treemap: zippedData});
-            }
-          });
-        }
-      });
-    } else {
-      this.getTreemap(isPdfium, allBugs, 'status:closed', (err, treemap) => {
-        if (err) {
-          alert(err);
-        } else {
-          treemap.map(data => {
-            if (!isNaN(parseInt(data[2]))) {
-              data[2] = parseInt(data[2]);
-              data[3] = parseInt(data[3]);
-            }
-            return data
-          });
-          if(normalise) {
-            treemap = this.normaliseTreemap(treemap)
-          }
-          this.setState({treemapLoaded: true, treemap: treemap});
-        }
-      });
-    }
   };
 
   render() {
 
-    if(!this.state.treemapLoaded) {
-      this.getTreemap(true, true, 'status:closed', (err, json) => {
-        if(err) {
-          alert(err);
-        } else {
-          json.map(data => {
-            if(!isNaN(parseInt(data[2]))) {
-              data[2] = parseInt(data[2]);
-              data[3] = parseInt(data[3]);
-            }
-            return data
+    let goUp = this.state.treemapLoaded ?
+      <button
+        id="goto-parent"
+        type="button"
+        disabled={this.state.treemapRoot === '~'}
+        onClick={() => {
+          let root = this.state.treemapRoot;
+          this.setState({treemapRoot: root.substr(0, root.lastIndexOf('/'))}, () => {
+            this.reloadTreemap();
           });
-          this.setState({treemapLoaded: true, treemap: json});
-        }
-      });
-    }
+        }}
+      >
+        Go Up
+      </button> :
+      <div/>;
 
-    return (
-      <div>
-        <h1>Chromium Bug Visualisations</h1>
-        <p>
-          This is a tool for viewing an overview of bugs in the Chromium and Pdfium projects as they appear in the
-          source code. API calls can be made
-          <a href={URL}> here.</a>
+    let gotoRoot = this.state.treemapLoaded ?
+      <button
+        id="goto-root"
+        type="button"
+        disabled={this.state.treemapRoot === '~'}
+        onClick={() => {
+          this.setState({treemapRoot: "~"}, () => {
+            this.reloadTreemap();
+          });
+        }}
+      >
+        To Top
+      </button> :
+      <div/>;
 
-        </p>
-        <p>Select which visualisation you would like to view:</p>
-        <select id="select-treemap" onChange={this.onChangeTreemap}>
-          <option value="pdfium-all">P: All</option>
-          <option value="pdfium-security">P: Security</option>
-          <option value="pdfium-security-vs-all">P: Security : All</option>
-        </select>
-        <input id="normalise-by-size" type="checkbox" onChange={this.onChangeTreemap}/>
-        <label for="normalise-by-size">Normalise by file size</label>
-        <Chart
+    let chart = this.state.treemapLoaded ?
+      <Chart
           chartType="TreeMap"
           data={this.state.treemap}
           options={{
@@ -195,16 +130,46 @@ class Home extends React.Component {
             minColor: '#38ff01',
             midColor: '#0c04ff',
             maxColor: '#ff01c0',
+            minColorValue: 0,
+            maxColorValue: this.state.maxValue,
             headerHeight: 15,
             showScale: true,
             useWeightedAverageForAggregation: true,
-            generateTooltip: this.showFullTooltip
+            generateTooltip: this.showFullTooltip,
           }}
           graph_id="TreeMap"
           width="100%"
           height="600px"
           legend_toggle
-        />
+          chartEvents={this.chartEvents}
+          on
+        /> : <div/>;
+
+    return (
+      <div>
+        <h1>Chromium Bug Visualisations</h1>
+        <p>
+          This is a tool for viewing an overview of bugs in the Chromium and Pdfium projects as they appear in the
+          source code. API calls can be made
+          <a href={URL}> here.</a>
+
+        </p>
+        <p>Due to huge size of treemap for chromium, depth of treemap can be altered for better performance.</p>
+        <p>Select which visualisation you would like to view:</p>
+        <select id="select-treemap">
+          <option value="pdfium/treemap/">P: All</option>
+          <option value="pdfium/security_treemap/">P: Security</option>
+          <option value="pdfium/security_ratio_treemap/">P: Security : All</option>
+          <option value="chromium/treemap/">C: All</option>
+          <option value="chromium/security_treemap/">C: Security</option>
+          <option value="chromium/security_ratio_treemap/">C: Security : All</option>
+        </select><br/>
+        <input id="normalise-by-size" type="checkbox"/>
+        <label for="normalise-by-size">Normalise by file size</label><br/>
+        <input id="tree-depth" type="text" placeholder="Tree depth (0 => full)"/><br/>
+        <button id="update-treemap" type="button" onClick={this.resetTreemap}>Render Treemap</button><br/><br/>
+        {goUp}
+        {chart}
       </div>
     );
   }
