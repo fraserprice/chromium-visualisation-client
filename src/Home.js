@@ -54,7 +54,8 @@ class Home extends React.Component {
       treemapLoaded: false,
       treemapType: treemapType,
       depth: depth,
-      normalise: normalise
+      normalise: normalise,
+      maxValue: 0
     }, () => {
       this.reloadTreemap();
     });
